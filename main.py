@@ -11,61 +11,12 @@ from keras import backend as K
 from keras.models import Model
 from keras.layers import Input, Layer
 import tensorflow as tf
-#nn4_small2 = create_model()
-#
-#in_a = Input(shape=(3, 96, 96))
-#in_p = Input(shape=(3, 96, 96))
-#in_n = Input(shape=(3, 96, 96))
-#
-#emb_a = nn4_small2(in_a)
-#emb_p = nn4_small2(in_p)
-#emb_n = nn4_small2(in_n)
-#
-#
-#
-#class TripletLossLayer(Layer):
-#    def __init__(self, alpha, **kwargs):
-#        self.alpha = alpha
-#        super(TripletLossLayer, self).__init__(**kwargs)
-#    
-#    def triplet_loss(self, inputs):
-#        a, p, n = inputs
-#        p_dist = K.sum(K.square(a-p), axis=-1)
-#        n_dist = K.sum(K.square(a-n), axis=-1)
-#        return K.sum(K.maximum(p_dist - n_dist + self.alpha, 0), axis=0)
-#    
-#    def call(self, inputs):
-#        loss = self.triplet_loss(inputs)
-#        self.add_loss(loss)
-#        return loss
-#
-## Layer that computes the triplet loss from anchor, positive and negative embedding vectors
-#triplet_loss_layer = TripletLossLayer(alpha=0.2, name='triplet_loss_layer')([emb_a, emb_p, emb_n])
-#
-## Model that can be trained with anchor, positive negative images
-#nn4_small2_train = Model([in_a, in_p, in_n], triplet_loss_layer)
-#
-#from data import triplet_generator
-#
-## triplet_generator() creates a generator that continuously returns 
-## ([a_batch, p_batch, n_batch], None) tuples where a_batch, p_batch 
-## and n_batch are batches of anchor, positive and negative RGB images 
-## each having a shape of (batch_size, 96, 96, 3).
-#generator = triplet_generator() 
-#
-#nn4_small2_train.compile(loss=None, optimizer='adam')
-#
-#nn4_small2_train.fit_generator(generator, epochs=10, steps_per_epoch=100)
-#
 
-## or we can use a pre trained modal
 nn4_small2_pretrained = create_model()
 nn4_small2_pretrained.load_weights('weights/nn4.small2.v1.h5')
 
 nn4_small2_pretrained.summary()
-#for layer in nn4_small2_train.layers:
-#    print(layer.get_output_at(0).get_shape().as_list())
-    
+
 
 import numpy as np
 import os.path
@@ -109,30 +60,8 @@ def load_image(path):
     # in BGR order. So we need to reverse them
     return img[...,::-1]
 
-# Initialize the OpenFace face alignment utility
 alignment = AlignDlib('models/landmarks.dat')
 
-## Load an image of Jacques Chirac
-#jc_orig = load_image('model.png')
-#
-## Detect face and return bounding box
-#bb = alignment.getLargestFaceBoundingBox(jc_orig)
-#
-## Transform image using specified face landmark indices and crop image to 96x96
-#jc_aligned = alignment.align(96, jc_orig, bb, landmarkIndices=AlignDlib.OUTER_EYES_AND_NOSE)
-#
-## Show original image
-#plt.subplot(131)
-#plt.imshow(jc_orig)
-#
-## Show original image with bounding box
-#plt.subplot(132)
-#plt.imshow(jc_orig)
-#plt.gca().add_patch(patches.Rectangle((bb.left(), bb.top()), bb.width(), bb.height(), fill=False, color='red'))
-#
-## Show aligned image
-#plt.subplot(133)
-#plt.imshow(jc_aligned);
 
 
 def align_image(img):
@@ -142,34 +71,11 @@ def align_image(img):
 
 embedded = np.zeros((metadata.shape[0], 128))
 
-img = load_image(str(metadata[19]))
-len(img)
-if(img):
-    print('lala')
-img = align_image(img)
-img.size()
 
-# scale RGB values to interval [0,1]
-img = (img / 255.).astype(np.float32)
-# obtain embedding vector for image
-embedded[0] = nn4_small2_pretrained.predict(np.expand_dims(img, axis=0))[0]
-print(img)
-def distance(emb1, emb2):
-    return np.sum(np.square(emb1 - emb2))
+dict = {}
+for i, m in enumerate(metadata):
+    dict[str(metadata[i]).split("\\")[2]] = i
 
-def show_pair(idx1, idx2):
-    plt.figure(figsize=(8,3))
-    plt.suptitle(f'Distance = {distance(embedded[idx1], embedded[idx2]):.2f}')
-    print(distance(embedded[idx1], embedded[idx2]))
-    plt.subplot(121)
-    plt.imshow(load_image(metadata[idx1].image_path()))
-    plt.subplot(122)
-    plt.imshow(load_image(metadata[idx2].image_path()));    
-
-show_pair(2, 3)
-show_pair(2, 12)
-    
-metadata[4]
 for i, m in enumerate(metadata):
     img = load_image(str(metadata[i]))
     img = align_image(img)
@@ -177,6 +83,7 @@ for i, m in enumerate(metadata):
         if(img.all() != None):
             img = (img / 255.).astype(np.float32)
             embedded[i] = nn4_small2_pretrained.predict(np.expand_dims(img, axis=0))[0]
+            dict[str(metadata[i])] = i
     except:
         print('no face here')
     
@@ -195,12 +102,167 @@ def show_pair(idx1, idx2):
 
 def check_pair(idx1, idx2):
     dif = distance(embedded[idx1], embedded[idx2])
-    if(dif<= 0.3):
-        print('Same Person')
+    if(dif<= 0.95):
+        #print('Same Person')
+        return 0
     else:
-        print('Different person')
-        
-show_pair(3, 4)
-show_pair(2, 12)
-show_pair(48, 10489)
+        #print('Different person')
+        return 1
+ 
+
+
+def readFile():
+    true_positive = 0 
+    true_negative = 0 
+    false_positive = 0
+    false_negative = 0
+    firstLine = True
+    times = 0
+    iters = 0
+    singles= 0
+    iterTemp = 0
+    with open('pairs.txt') as f:
+        for line in f:
+            if firstLine:
+   
+                times = int(line.split("\t")[0])         
+                iters = int(line.split("\t")[1])
+                iterTemp = int(line.split("\t")[1])
+                firstLine = False
+   
+                continue
+                    
+            else:
+                
+                if (times == 0):
+                    break
+                if(iters == 0 and singles == 1):
+                    
+                    a1 = (line.split("\t")[0])
+                    a2 = (line.split("\t")[1])
+                    a3 = (line.split("\t")[2])
+                    a3= (a3.split("\n")[0])
+                    iters=iterTemp
+                    singles = 0
+                    times -= 1
+                    if(int(a2) >= 100):
+                        strImage = '_0' + str(a2)
+                    elif(int(a2) >= 10):
+                        strImage = '_00' + str(a2)
+                    else:
+                        strImage = '_000' + str(a2)
+                    if(int(a3) >= 100):
+                        strImage2 = '_0' + str(a3)
+                    elif(int(a3) >= 10):
+                        strImage2 = '_00' + str(a3)
+                    else:
+                        strImage2 = '_000' + str(a3)
+                            
+                        
+                    path = a1 + strImage + '.jpg'
+                    path2 = a1 + strImage2 + '.jpg'
+ 
+                elif(iters == 0 and singles == 0):
+                    
+                    a1= (line.split("\t")[0])
+                    a2= (line.split("\t")[1])
+                    
+                    a3= (line.split("\t")[2])
+                    a4= (line.split("\t")[3])
+                    a4= (a4.split("\n")[0])
+                    singles = 1
+                    iters = iterTemp
+                    
+                    if(int(a2) >= 100):
+                        strImage = '_0' + str(a2)
+                    elif(int(a2) >= 10):
+                        strImage = '_00' + str(a2)
+                    else:
+                        strImage = '_000' + str(a2)
+                    
+                    if(int(a4) >= 100):
+                        strImage2 = '_0' + str(a4)
+                    elif(int(a4) >= 10):
+                        strImage2 = '_00' + str(a4)
+                    else:
+                        strImage2 = '_000' + str(a4)
+                            
+                        
+                    path = a1 + strImage + '.jpg'
+                    path2 = a3 + strImage2 + '.jpg'
+
+                else:
+                
+                    if(singles == 1):
+                        a1= (line.split("\t")[0])
+                        a2= (line.split("\t")[1])
+                        a3= (line.split("\t")[2])
+                        a4= (line.split("\t")[3])
+                        
+                        a4= (a4.split("\n")[0])
+                        
+                        if(int(a2) >= 100):
+                            strImage = '_0' + str(a2)
+                        elif(int(a2) >= 10):
+                            strImage = '_00' + str(a2)
+                        else:
+                            strImage = '_000' + str(a2)
+                        if(int(a4) >= 100):
+                            strImage2 = '_0' + str(a4)
+                        elif(int(a4) >= 10):
+                            strImage2 = '_00' + str(a4)
+                        else:
+                            strImage2 = '_000' + str(a4)
+                                
+                            
+                        path = a1 + strImage + '.jpg'
+                        path2 = a3 + strImage2 + '.jpg'
+  
+                    else:
+                        a1= (line.split("\t")[0])
+                        a2= (line.split("\t")[1])
+                        a3= (line.split("\t")[2])
+                        a3= (a3.split("\n")[0])
+                        if(int(a2) >= 100):
+                            strImage = '_0' + str(a2)
+                        elif(int(a2) >= 10):
+                            strImage = '_00' + str(a2)
+                        else:
+                            strImage = '_000' + str(a2)
+                        if(int(a3) >= 100):
+                            strImage2 = '_0' + str(a3)
+                        elif(int(a3) >= 10):
+                            strImage2 = '_00' + str(a3)
+                        else:
+                            strImage2 = '_000' + str(a3)
+                            
+                        path = a1 + strImage + '.jpg'
+                        path2 = a1 + strImage2 + '.jpg'
+
+                iters -= 1
+                
+                ret_value = check_pair(dict[path], dict[path2])
+                if(singles == ret_value):
+                    if(singles==0):
+                        true_positive += 1
+                        
+                    elif(singles==1):
+                        true_negative +=1
+                        
+                else:
+                    if(singles==0):
+                        false_negative += 1
+                        
+                    elif(singles==1):
+                        false_positive += 1
+
+                
+    print('True Positive: ' + str(true_positive))
+    print('True Negative: ' + str(true_negative))
+    print('false Positive: ' + str(false_positive))
+    print('False Negative: ' + str(false_negative))
+    print((true_positive+true_negative) / (true_negative+true_positive+false_positive+false_negative))
+readFile()
+
+
     
